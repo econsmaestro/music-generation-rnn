@@ -168,9 +168,9 @@ def generate_music(filename, length, temperature):
     for token in note_names:
         if '_' in token:
             pattern, dur_str = token.rsplit('_', 1)
-            dur = float(dur_str) * tempo_scale
+            dur = min(float(dur_str), 1.0) * tempo_scale
         else:
-            pattern, dur = token, 1.0 * tempo_scale
+            pattern, dur = token, 0.5 * tempo_scale
 
         try:
             if '.' in pattern:
