@@ -97,21 +97,36 @@ def parse_chat(message, history):
 
 
 def midi_to_wav(midi_path, wav_path):
-    from mido import MidiFile
+    from mido import MidiFile, tick2second
     mid = MidiFile(midi_path)
     sample_rate = 22050
-    duration = mid.length
+    tempo = 500000  # default 120 BPM
+
+    events = []
+    t = 0.0
+    for track in mid.tracks:
+        t = 0.0
+        for msg in track:
+            t += tick2second(msg.time, mid.ticks_per_beat, tempo)
+            if msg.type == 'set_tempo':
+                tempo = msg.tempo
+            if msg.type == 'note_on' and msg.velocity > 0:
+                events.append((t, msg.note))
+
+    if not events:
+        return
+
+    duration = max(t for t, _ in events) + 1.0
     samples = int(sample_rate * duration)
     audio = np.zeros(samples, dtype=np.float32)
 
-    t = 0
-    for msg in mid.play():
-        if msg.type == 'note_on' and msg.velocity > 0:
-            freq = 440.0 * (2.0 ** ((msg.note - 69) / 12.0))
-            start = int(t * sample_rate)
-            end = min(start + int(0.5 * sample_rate), samples)
-            ts = np.linspace(0, end - start, end - start, endpoint=False) / sample_rate
-            audio[start:end] += 0.3 * np.sin(2 * np.pi * freq * ts) * np.exp(-3 * ts)
+    for t, midi_note in events:
+        freq = 440.0 * (2.0 ** ((midi_note - 69) / 12.0))
+        start = int(t * sample_rate)
+        note_len = int(0.4 * sample_rate)
+        end = min(start + note_len, samples)
+        ts = np.arange(end - start) / sample_rate
+        audio[start:end] += 0.3 * np.sin(2 * np.pi * freq * ts) * np.exp(-4 * ts)
 
     if np.max(np.abs(audio)) > 0:
         audio = audio / np.max(np.abs(audio))
