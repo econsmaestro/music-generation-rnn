@@ -91,14 +91,9 @@ def parse_chat(message, history):
         response_parts.append("Reset all settings to default.")
 
     if not response_parts:
-        reply = "I didn't understand that. Try: 'slower', 'faster', 'more notes', 'use violin', 'more creative', or 'reset'."
-    else:
-        reply = " ".join(response_parts) + f"\n\nCurrent settings: {current_settings['instrument']} | {current_settings['length']} notes | creativity {current_settings['temperature']:.1f} | tempo x{1/current_settings['tempo_scale']:.1f}. Hit Generate to apply!"
+        return "I didn't understand that. Try: 'slower', 'faster', 'more notes', 'use violin', 'more creative', or 'reset'."
 
-    history = history or []
-    history.append({"role": "user", "content": message})
-    history.append({"role": "assistant", "content": reply})
-    return history
+    return " ".join(response_parts) + f"\n\nCurrent settings: {current_settings['instrument']} | {current_settings['length']} notes | creativity {current_settings['temperature']:.1f} | tempo x{1/current_settings['tempo_scale']:.1f}. Hit Generate to apply!"
 
 
 def midi_to_wav(midi_path, wav_path):
@@ -202,10 +197,7 @@ with gr.Blocks(title="Music Generation with LSTM") as demo:
     with gr.Row():
         with gr.Column(scale=1):
             gr.Markdown("### Chat to adjust settings")
-            chatbot = gr.Chatbot(height=300, type="messages")
-            chat_input = gr.Textbox(placeholder="e.g. make it slower, use violin, more creative...")
-            chat_input.submit(parse_chat, [chat_input, chatbot], [chatbot])
-            chat_input.submit(lambda: "", None, chat_input)
+            gr.ChatInterface(fn=parse_chat, type="messages")
 
         with gr.Column(scale=1):
             gr.Markdown("### Generate Music")
