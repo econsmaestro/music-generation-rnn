@@ -32,6 +32,70 @@ model = MusicLSTM(vocab_size=vocab_size, hidden_size=512).to(device)
 model.load_state_dict(torch.load('music_lstm.pth', map_location=device))
 model.eval()
 
+INSTRUMENTS = {
+    "Piano": m21instrument.Piano(),
+    "Violin": m21instrument.Violin(),
+    "Guitar": m21instrument.Guitar(),
+    "Flute": m21instrument.Flute(),
+    "Trumpet": m21instrument.Trumpet(),
+    "Cello": m21instrument.Violoncello(),
+    "Saxophone": m21instrument.Saxophone(),
+    "Clarinet": m21instrument.Clarinet(),
+}
+
+# Default generation settings
+current_settings = {
+    "length": 200,
+    "temperature": 0.8,
+    "instrument": "Piano",
+    "tempo_scale": 1.0,
+}
+
+
+def parse_chat(message, history):
+    msg = message.lower()
+    response_parts = []
+
+    if any(w in msg for w in ["slower", "slow down", "slow"]):
+        current_settings["tempo_scale"] = min(current_settings["tempo_scale"] * 1.5, 4.0)
+        response_parts.append("Slowed tempo down.")
+
+    if any(w in msg for w in ["faster", "speed up", "fast"]):
+        current_settings["tempo_scale"] = max(current_settings["tempo_scale"] * 0.7, 0.25)
+        response_parts.append("Sped tempo up.")
+
+    if any(w in msg for w in ["more notes", "longer", "more music"]):
+        current_settings["length"] = min(current_settings["length"] + 100, 500)
+        response_parts.append(f"Increased notes to {current_settings['length']}.")
+
+    if any(w in msg for w in ["fewer notes", "shorter", "less"]):
+        current_settings["length"] = max(current_settings["length"] - 100, 50)
+        response_parts.append(f"Decreased notes to {current_settings['length']}.")
+
+    if any(w in msg for w in ["creative", "random", "wild", "experimental"]):
+        current_settings["temperature"] = min(current_settings["temperature"] + 0.2, 1.5)
+        response_parts.append(f"Increased creativity to {current_settings['temperature']:.1f}.")
+
+    if any(w in msg for w in ["structured", "calm", "predictable", "less random"]):
+        current_settings["temperature"] = max(current_settings["temperature"] - 0.2, 0.5)
+        response_parts.append(f"Decreased creativity to {current_settings['temperature']:.1f}.")
+
+    for inst in INSTRUMENTS:
+        if inst.lower() in msg:
+            current_settings["instrument"] = inst
+            response_parts.append(f"Switched instrument to {inst}.")
+            break
+
+    if any(w in msg for w in ["reset", "default", "start over"]):
+        current_settings.update({"length": 200, "temperature": 0.8, "instrument": "Piano", "tempo_scale": 1.0})
+        response_parts.append("Reset all settings to default.")
+
+    if not response_parts:
+        return history + [[message, "I didn't understand that. Try: 'slower', 'faster', 'more notes', 'use violin', 'more creative', or 'reset'."]]
+
+    summary = " ".join(response_parts) + f"\n\nCurrent settings: {current_settings['instrument']} | {current_settings['length']} notes | creativity {current_settings['temperature']:.1f} | tempo x{1/current_settings['tempo_scale']:.1f}. Hit Generate to apply!"
+    return history + [[message, summary]]
+
 
 def midi_to_wav(midi_path, wav_path):
     from mido import MidiFile
@@ -52,25 +116,18 @@ def midi_to_wav(midi_path, wav_path):
 
     if np.max(np.abs(audio)) > 0:
         audio = audio / np.max(np.abs(audio))
-    audio_int16 = np.int16(audio * 32767)
-    wav.write(wav_path, sample_rate, audio_int16)
+    wav.write(wav_path, sample_rate, np.int16(audio * 32767))
 
-
-INSTRUMENTS = {
-    "Piano": m21instrument.Piano(),
-    "Violin": m21instrument.Violin(),
-    "Guitar": m21instrument.Guitar(),
-    "Flute": m21instrument.Flute(),
-    "Trumpet": m21instrument.Trumpet(),
-    "Cello": m21instrument.Violoncello(),
-    "Saxophone": m21instrument.Saxophone(),
-    "Clarinet": m21instrument.Clarinet(),
-}
 
 def generate_music(filename, instrument_name, length, temperature):
     if not filename.strip():
         filename = "generated_music"
     filename = filename.strip().replace(" ", "_")
+
+    length = current_settings["length"]
+    temperature = current_settings["temperature"]
+    instrument_name = current_settings["instrument"]
+    tempo_scale = current_settings["tempo_scale"]
 
     seed = torch.randint(0, vocab_size, (50,)).tolist()
     input_seq = torch.tensor([seed], dtype=torch.long).to(device)
@@ -92,9 +149,9 @@ def generate_music(filename, instrument_name, length, temperature):
     for token in note_names:
         if '_' in token:
             pattern, dur_str = token.rsplit('_', 1)
-            dur = float(dur_str)
+            dur = float(dur_str) * tempo_scale
         else:
-            pattern, dur = token, 1.0
+            pattern, dur = token, 1.0 * tempo_scale
 
         try:
             if '.' in pattern:
@@ -124,21 +181,33 @@ def generate_music(filename, instrument_name, length, temperature):
         return midi_path, None
 
 
-demo = gr.Interface(
-    fn=generate_music,
-    inputs=[
-        gr.Textbox(label="Song Name", placeholder="e.g. my_melody"),
-        gr.Dropdown(choices=list(INSTRUMENTS.keys()), value="Piano", label="Instrument"),
-        gr.Slider(50, 500, value=200, step=50, label="Number of Notes"),
-        gr.Slider(0.5, 1.5, value=0.8, step=0.1, label="Temperature (creativity)"),
-    ],
-    outputs=[
-        gr.File(label="Download MIDI"),
-        gr.Audio(label="Play Music", type="filepath"),
-    ],
-    title="Music Generation with LSTM",
-    description="Generate original music using an LSTM trained on classical MIDI files. Choose your instrument, name your song, adjust the settings, and play or download the result.",
-)
+with gr.Blocks(title="Music Generation with LSTM") as demo:
+    gr.Markdown("# Music Generation with LSTM")
+    gr.Markdown("Generate original music using an LSTM trained on classical MIDI files. Use the chatbot to adjust settings, then hit Generate.")
+
+    with gr.Row():
+        with gr.Column(scale=1):
+            gr.Markdown("### Chat to adjust settings")
+            chatbot = gr.Chatbot(height=300)
+            chat_input = gr.Textbox(placeholder="e.g. make it slower, use violin, more creative...")
+            chat_input.submit(parse_chat, [chat_input, chatbot], [chatbot])
+            chat_input.submit(lambda: "", None, chat_input)
+
+        with gr.Column(scale=1):
+            gr.Markdown("### Generate Music")
+            filename_input = gr.Textbox(label="Song Name", placeholder="e.g. my_melody")
+            instrument_input = gr.Dropdown(choices=list(INSTRUMENTS.keys()), value="Piano", label="Instrument")
+            length_input = gr.Slider(50, 500, value=200, step=50, label="Number of Notes")
+            temperature_input = gr.Slider(0.5, 1.5, value=0.8, step=0.1, label="Temperature (creativity)")
+            generate_btn = gr.Button("Generate", variant="primary")
+            midi_output = gr.File(label="Download MIDI")
+            audio_output = gr.Audio(label="Play Music", type="filepath")
+
+    generate_btn.click(
+        generate_music,
+        inputs=[filename_input, instrument_input, length_input, temperature_input],
+        outputs=[midi_output, audio_output]
+    )
 
 if __name__ == "__main__":
     demo.launch()
