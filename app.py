@@ -6,7 +6,7 @@ import numpy as np
 import scipy.io.wavfile as wav
 import pretty_midi
 import gradio as gr
-from music21 import stream, note, chord
+from music21 import stream, note, chord, instrument as m21instrument
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -41,7 +41,18 @@ def midi_to_wav(midi_path, wav_path):
     wav.write(wav_path, 22050, audio)
 
 
-def generate_music(filename, length, temperature):
+INSTRUMENTS = {
+    "Piano": m21instrument.Piano(),
+    "Violin": m21instrument.Violin(),
+    "Guitar": m21instrument.Guitar(),
+    "Flute": m21instrument.Flute(),
+    "Trumpet": m21instrument.Trumpet(),
+    "Cello": m21instrument.Violoncello(),
+    "Saxophone": m21instrument.Saxophone(),
+    "Clarinet": m21instrument.Clarinet(),
+}
+
+def generate_music(filename, instrument_name, length, temperature):
     if not filename.strip():
         filename = "generated_music"
     filename = filename.strip().replace(" ", "_")
@@ -61,6 +72,7 @@ def generate_music(filename, length, temperature):
 
     note_names = label_encoder.inverse_transform(generated)
     midi_stream = stream.Stream()
+    midi_stream.append(INSTRUMENTS.get(instrument_name, m21instrument.Piano()))
 
     for token in note_names:
         if '_' in token:
@@ -101,6 +113,7 @@ demo = gr.Interface(
     fn=generate_music,
     inputs=[
         gr.Textbox(label="Song Name", placeholder="e.g. my_melody"),
+        gr.Dropdown(choices=list(INSTRUMENTS.keys()), value="Piano", label="Instrument"),
         gr.Slider(50, 500, value=200, step=50, label="Number of Notes"),
         gr.Slider(0.5, 1.5, value=0.8, step=0.1, label="Temperature (creativity)"),
     ],
@@ -109,7 +122,7 @@ demo = gr.Interface(
         gr.Audio(label="Play Music", type="filepath"),
     ],
     title="Music Generation with LSTM",
-    description="Generate original piano music using an LSTM trained on classical MIDI files. Name your song, adjust the settings, and play or download the result.",
+    description="Generate original music using an LSTM trained on classical MIDI files. Choose your instrument, name your song, adjust the settings, and play or download the result.",
 )
 
 if __name__ == "__main__":
