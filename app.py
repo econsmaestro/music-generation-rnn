@@ -174,16 +174,20 @@ def generate_music(filename, length, temperature):
 
         try:
             if '.' in pattern:
-                chord_notes = [note.Note(midi=int(n) + 60) for n in pattern.split('.')]
+                midi_notes = [max(48, min(84, int(n) + 60)) for n in pattern.split('.')]
+                chord_notes = [note.Note(midi=m) for m in midi_notes]
                 c = chord.Chord(chord_notes)
                 c.duration.quarterLength = dur
                 midi_stream.append(c)
             elif pattern.lstrip('-').isdigit():
-                n = note.Note(midi=int(pattern) + 60)
+                midi_num = max(48, min(84, int(pattern) + 60))
+                n = note.Note(midi=midi_num)
                 n.duration.quarterLength = dur
                 midi_stream.append(n)
             else:
                 n = note.Note(pattern)
+                if n.pitch.midi < 48 or n.pitch.midi > 84:
+                    continue
                 n.duration.quarterLength = dur
                 midi_stream.append(n)
         except Exception:
