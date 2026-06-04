@@ -32,22 +32,11 @@ model = MusicLSTM(vocab_size=vocab_size, hidden_size=512).to(device)
 model.load_state_dict(torch.load('music_lstm.pth', map_location=device))
 model.eval()
 
-INSTRUMENTS = {
-    "Piano": m21instrument.Piano(),
-    "Violin": m21instrument.Violin(),
-    "Guitar": m21instrument.Guitar(),
-    "Flute": m21instrument.Flute(),
-    "Trumpet": m21instrument.Trumpet(),
-    "Cello": m21instrument.Violoncello(),
-    "Saxophone": m21instrument.Saxophone(),
-    "Clarinet": m21instrument.Clarinet(),
-}
 
 # Default generation settings
 current_settings = {
     "length": 200,
     "temperature": 0.8,
-    "instrument": "Piano",
     "tempo_scale": 1.0,
     "volume": 0.25,
 }
@@ -96,13 +85,13 @@ def parse_chat(message, history):
         response_parts.append("Decreased volume.")
 
     if any(w in msg for w in ["reset", "default", "start over"]):
-        current_settings.update({"length": 200, "temperature": 0.8, "instrument": "Piano", "tempo_scale": 1.0, "volume": 0.25})
+        current_settings.update({"length": 200, "temperature": 0.8, "tempo_scale": 1.0, "volume": 0.25})
         response_parts.append("Reset all settings to default.")
 
     if not response_parts:
-        return "I didn't understand that. Try: 'slower', 'faster', 'more notes', 'use violin', 'more creative', or 'reset'."
+        return "I didn't understand that. Try: 'slower', 'faster', 'more notes', 'more creative', 'louder', or 'reset'."
 
-    return " ".join(response_parts) + f"\n\nCurrent settings: {current_settings['instrument']} | {current_settings['length']} notes | creativity {current_settings['temperature']:.1f} | tempo x{1/current_settings['tempo_scale']:.1f} | volume {int(current_settings['volume']*400)}%. Hit Generate to apply!"
+    return " ".join(response_parts) + f"\n\nCurrent settings: {current_settings['length']} notes | creativity {current_settings['temperature']:.1f} | tempo x{1/current_settings['tempo_scale']:.1f} | volume {int(current_settings['volume']*400)}%. Hit Generate to apply!"
 
 
 def midi_to_wav(midi_path, wav_path):
@@ -150,14 +139,13 @@ def midi_to_wav(midi_path, wav_path):
     wav.write(wav_path, sample_rate, np.int16(audio * 32767))
 
 
-def generate_music(filename, instrument_name, length, temperature):
+def generate_music(filename, length, temperature):
     if not filename.strip():
         filename = "generated_music"
     filename = filename.strip().replace(" ", "_")
 
     length = current_settings["length"]
     temperature = current_settings["temperature"]
-    instrument_name = current_settings["instrument"]
     tempo_scale = current_settings["tempo_scale"]
 
     seed = torch.randint(0, vocab_size, (50,)).tolist()
@@ -175,7 +163,7 @@ def generate_music(filename, instrument_name, length, temperature):
 
     note_names = label_encoder.inverse_transform(generated)
     midi_stream = stream.Stream()
-    midi_stream.append(INSTRUMENTS.get(instrument_name, m21instrument.Piano()))
+    midi_stream.append(m21instrument.Piano())
 
     for token in note_names:
         if '_' in token:
@@ -224,7 +212,6 @@ with gr.Blocks(title="Music Generation with LSTM") as demo:
 | Tempo | *"make it slower"*, *"speed it up"* |
 | Length | *"more notes"*, *"make it shorter"* |
 | Creativity | *"more creative"*, *"more structured"* |
-| Instrument | *"use violin"*, *"switch to flute"* |
 | Volume | *"louder"*, *"softer"*, *"quieter"* |
 | Reset | *"reset"*, *"start over"* |
 """)
@@ -237,7 +224,6 @@ with gr.Blocks(title="Music Generation with LSTM") as demo:
         with gr.Column(scale=1):
             gr.Markdown("### Generate Music")
             filename_input = gr.Textbox(label="Song Name", placeholder="e.g. my_melody")
-            instrument_input = gr.Dropdown(choices=list(INSTRUMENTS.keys()), value="Piano", label="Instrument")
             length_input = gr.Slider(50, 500, value=200, step=50, label="Number of Notes")
             temperature_input = gr.Slider(0.5, 1.5, value=0.8, step=0.1, label="Temperature (creativity)")
             generate_btn = gr.Button("Generate", variant="primary")
@@ -246,7 +232,7 @@ with gr.Blocks(title="Music Generation with LSTM") as demo:
 
     generate_btn.click(
         generate_music,
-        inputs=[filename_input, instrument_input, length_input, temperature_input],
+        inputs=[filename_input, length_input, temperature_input],
         outputs=[midi_output, audio_output]
     )
 
