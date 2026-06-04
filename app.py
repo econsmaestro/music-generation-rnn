@@ -49,6 +49,7 @@ current_settings = {
     "temperature": 0.8,
     "instrument": "Piano",
     "tempo_scale": 1.0,
+    "volume": 0.25,
 }
 
 
@@ -86,14 +87,22 @@ def parse_chat(message, history):
             response_parts.append(f"Switched instrument to {inst}.")
             break
 
+    if any(w in msg for w in ["louder", "loud", "increase volume", "turn up"]):
+        current_settings["volume"] = min(current_settings["volume"] + 0.1, 0.6)
+        response_parts.append("Increased volume.")
+
+    if any(w in msg for w in ["softer", "quieter", "quiet", "lower volume", "turn down"]):
+        current_settings["volume"] = max(current_settings["volume"] - 0.1, 0.05)
+        response_parts.append("Decreased volume.")
+
     if any(w in msg for w in ["reset", "default", "start over"]):
-        current_settings.update({"length": 200, "temperature": 0.8, "instrument": "Piano", "tempo_scale": 1.0})
+        current_settings.update({"length": 200, "temperature": 0.8, "instrument": "Piano", "tempo_scale": 1.0, "volume": 0.25})
         response_parts.append("Reset all settings to default.")
 
     if not response_parts:
         return "I didn't understand that. Try: 'slower', 'faster', 'more notes', 'use violin', 'more creative', or 'reset'."
 
-    return " ".join(response_parts) + f"\n\nCurrent settings: {current_settings['instrument']} | {current_settings['length']} notes | creativity {current_settings['temperature']:.1f} | tempo x{1/current_settings['tempo_scale']:.1f}. Hit Generate to apply!"
+    return " ".join(response_parts) + f"\n\nCurrent settings: {current_settings['instrument']} | {current_settings['length']} notes | creativity {current_settings['temperature']:.1f} | tempo x{1/current_settings['tempo_scale']:.1f} | volume {int(current_settings['volume']*400)}%. Hit Generate to apply!"
 
 
 def midi_to_wav(midi_path, wav_path):
@@ -133,13 +142,13 @@ def midi_to_wav(midi_path, wav_path):
         envelope[:attack] = np.linspace(0, 1, attack)
         envelope *= np.exp(-2 * ts)
 
-        # harmonics: fundamental + 2nd + 3rd harmonic
+        # fundamental + subtle harmonics to avoid beeping
         wave = (
-            0.5 * np.sin(2 * np.pi * freq * ts) +
-            0.3 * np.sin(2 * np.pi * freq * 2 * ts) +
-            0.2 * np.sin(2 * np.pi * freq * 3 * ts)
+            0.7 * np.sin(2 * np.pi * freq * ts) +
+            0.2 * np.sin(2 * np.pi * freq * 2 * ts) +
+            0.1 * np.sin(2 * np.pi * freq * 3 * ts)
         )
-        audio[start:end] += 0.25 * wave * envelope
+        audio[start:end] += current_settings["volume"] * wave * envelope
 
     if np.max(np.abs(audio)) > 0:
         audio = audio / np.max(np.abs(audio))
@@ -219,6 +228,7 @@ with gr.Blocks(title="Music Generation with LSTM") as demo:
 | Length | *"more notes"*, *"make it shorter"* |
 | Creativity | *"more creative"*, *"more structured"* |
 | Instrument | *"use violin"*, *"switch to flute"* |
+| Volume | *"louder"*, *"softer"*, *"quieter"* |
 | Reset | *"reset"*, *"start over"* |
 """)
 
