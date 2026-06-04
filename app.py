@@ -183,7 +183,17 @@ def generate_music(filename, instrument_name, length, temperature):
 
 with gr.Blocks(title="Music Generation with LSTM") as demo:
     gr.Markdown("# Music Generation with LSTM")
-    gr.Markdown("Generate original music using an LSTM trained on classical MIDI files. Use the chatbot to adjust settings, then hit Generate.")
+    gr.Markdown("""Generate original music using an LSTM trained on classical MIDI files. Use the chatbot to adjust settings, then hit **Generate**.
+
+### What the chatbot understands:
+| Command | Example |
+|---|---|
+| Tempo | *"make it slower"*, *"speed it up"* |
+| Length | *"more notes"*, *"make it shorter"* |
+| Creativity | *"more creative"*, *"more structured"* |
+| Instrument | *"use violin"*, *"switch to flute"* |
+| Reset | *"reset"*, *"start over"* |
+""")
 
     with gr.Row():
         with gr.Column(scale=1):
