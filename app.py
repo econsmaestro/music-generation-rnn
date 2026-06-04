@@ -142,12 +142,7 @@ def midi_to_wav(midi_path, wav_path):
         envelope[:attack] = np.linspace(0, 1, attack)
         envelope *= np.exp(-2 * ts)
 
-        # fundamental + subtle harmonics to avoid beeping
-        wave = (
-            0.7 * np.sin(2 * np.pi * freq * ts) +
-            0.2 * np.sin(2 * np.pi * freq * 2 * ts) +
-            0.1 * np.sin(2 * np.pi * freq * 3 * ts)
-        )
+        wave = np.sin(2 * np.pi * freq * ts)
         audio[start:end] += current_settings["volume"] * wave * envelope
 
     if np.max(np.abs(audio)) > 0:
