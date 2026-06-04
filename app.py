@@ -216,6 +216,8 @@ with gr.Blocks(title="Music Generation with LSTM") as demo:
     gr.Markdown("# Music Generation with LSTM")
     gr.Markdown("""Generate original music using an LSTM trained on classical MIDI files. Use the chatbot to adjust settings, then hit **Generate**.
 
+**Tip:** Download the MIDI file and open it in VLC or Windows Media Player for the best sound quality.
+
 ### What the chatbot understands:
 | Command | Example |
 |---|---|
