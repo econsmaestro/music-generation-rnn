@@ -1,0 +1,6 @@
+maestro-v3.0.0/
+.ipynb_checkpoints/
+__pycache__/
+*.pth
+*.pkl
+*.mid
