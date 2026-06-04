@@ -197,7 +197,7 @@ with gr.Blocks(title="Music Generation with LSTM") as demo:
     with gr.Row():
         with gr.Column(scale=1):
             gr.Markdown("### Chat to adjust settings")
-            gr.ChatInterface(fn=parse_chat, type="messages")
+            gr.ChatInterface(fn=parse_chat)
 
         with gr.Column(scale=1):
             gr.Markdown("### Generate Music")
