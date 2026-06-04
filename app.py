@@ -4,7 +4,6 @@ import torch
 import torch.nn as nn
 import numpy as np
 import scipy.io.wavfile as wav
-import pretty_midi
 import gradio as gr
 from music21 import stream, note, chord, instrument as m21instrument
 
@@ -35,10 +34,26 @@ model.eval()
 
 
 def midi_to_wav(midi_path, wav_path):
-    pm = pretty_midi.PrettyMIDI(midi_path)
-    audio = pm.fluidsynth(fs=22050)
-    audio = np.int16(audio / np.max(np.abs(audio)) * 32767)
-    wav.write(wav_path, 22050, audio)
+    from mido import MidiFile
+    mid = MidiFile(midi_path)
+    sample_rate = 22050
+    duration = mid.length
+    samples = int(sample_rate * duration)
+    audio = np.zeros(samples, dtype=np.float32)
+
+    t = 0
+    for msg in mid.play():
+        if msg.type == 'note_on' and msg.velocity > 0:
+            freq = 440.0 * (2.0 ** ((msg.note - 69) / 12.0))
+            start = int(t * sample_rate)
+            end = min(start + int(0.5 * sample_rate), samples)
+            ts = np.linspace(0, end - start, end - start, endpoint=False) / sample_rate
+            audio[start:end] += 0.3 * np.sin(2 * np.pi * freq * ts) * np.exp(-3 * ts)
+
+    if np.max(np.abs(audio)) > 0:
+        audio = audio / np.max(np.abs(audio))
+    audio_int16 = np.int16(audio * 32767)
+    wav.write(wav_path, sample_rate, audio_int16)
 
 
 INSTRUMENTS = {
