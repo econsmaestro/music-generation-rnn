@@ -1,8 +1,12 @@
 import pickle
+import os
 import torch
 import torch.nn as nn
-from music21 import stream, note, chord
+import numpy as np
+import scipy.io.wavfile as wav
+import pretty_midi
 import gradio as gr
+from music21 import stream, note, chord
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -30,7 +34,18 @@ model.load_state_dict(torch.load('music_lstm.pth', map_location=device))
 model.eval()
 
 
-def generate_music(length, temperature):
+def midi_to_wav(midi_path, wav_path):
+    pm = pretty_midi.PrettyMIDI(midi_path)
+    audio = pm.fluidsynth(fs=22050)
+    audio = np.int16(audio / np.max(np.abs(audio)) * 32767)
+    wav.write(wav_path, 22050, audio)
+
+
+def generate_music(filename, length, temperature):
+    if not filename.strip():
+        filename = "generated_music"
+    filename = filename.strip().replace(" ", "_")
+
     seed = torch.randint(0, vocab_size, (50,)).tolist()
     input_seq = torch.tensor([seed], dtype=torch.long).to(device)
     generated = list(seed)
@@ -71,20 +86,30 @@ def generate_music(length, temperature):
         except Exception:
             continue
 
-    output_path = 'generated_music.mid'
-    midi_stream.write('midi', fp=output_path)
-    return output_path
+    midi_path = f"{filename}.mid"
+    wav_path = f"{filename}.wav"
+    midi_stream.write('midi', fp=midi_path)
+
+    try:
+        midi_to_wav(midi_path, wav_path)
+        return midi_path, wav_path
+    except Exception:
+        return midi_path, None
 
 
 demo = gr.Interface(
     fn=generate_music,
     inputs=[
+        gr.Textbox(label="Song Name", placeholder="e.g. my_melody"),
         gr.Slider(50, 500, value=200, step=50, label="Number of Notes"),
         gr.Slider(0.5, 1.5, value=0.8, step=0.1, label="Temperature (creativity)"),
     ],
-    outputs=gr.File(label="Download Generated MIDI"),
+    outputs=[
+        gr.File(label="Download MIDI"),
+        gr.Audio(label="Play Music", type="filepath"),
+    ],
     title="Music Generation with LSTM",
-    description="Generate original piano music using an LSTM trained on classical MIDI files. Download the MIDI and open it in any media player.",
+    description="Generate original piano music using an LSTM trained on classical MIDI files. Name your song, adjust the settings, and play or download the result.",
 )
 
 if __name__ == "__main__":
