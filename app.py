@@ -123,10 +123,23 @@ def midi_to_wav(midi_path, wav_path):
     for t, midi_note in events:
         freq = 440.0 * (2.0 ** ((midi_note - 69) / 12.0))
         start = int(t * sample_rate)
-        note_len = int(0.4 * sample_rate)
+        note_len = int(0.6 * sample_rate)
         end = min(start + note_len, samples)
         ts = np.arange(end - start) / sample_rate
-        audio[start:end] += 0.3 * np.sin(2 * np.pi * freq * ts) * np.exp(-4 * ts)
+
+        # attack-decay envelope
+        attack = int(0.01 * sample_rate)
+        envelope = np.ones(len(ts))
+        envelope[:attack] = np.linspace(0, 1, attack)
+        envelope *= np.exp(-2 * ts)
+
+        # harmonics: fundamental + 2nd + 3rd harmonic
+        wave = (
+            0.5 * np.sin(2 * np.pi * freq * ts) +
+            0.3 * np.sin(2 * np.pi * freq * 2 * ts) +
+            0.2 * np.sin(2 * np.pi * freq * 3 * ts)
+        )
+        audio[start:end] += 0.25 * wave * envelope
 
     if np.max(np.abs(audio)) > 0:
         audio = audio / np.max(np.abs(audio))
